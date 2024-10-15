@@ -31,8 +31,8 @@ jobs:
           # Obter a versão principal do Google Chrome (exemplo: 130)
           CHROME_MAJOR_VERSION=$(google-chrome --version | grep -oP '\d+' | head -n1)
 
-          # Obter a última versão do ChromeDriver correspondente
-          CHROMEDRIVER_VERSION=$(curl -sS https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$CHROME_MAJOR_VERSION)
+          # Obter a versão do ChromeDriver correspondente; se falhar, pegar a última versão estável
+          CHROMEDRIVER_VERSION=$(curl -sS https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$CHROME_MAJOR_VERSION || curl -sS https://chromedriver.storage.googleapis.com/LATEST_RELEASE)
 
           # Verificar se a versão foi recuperada corretamente
           if [ -z "$CHROMEDRIVER_VERSION" ]; then
