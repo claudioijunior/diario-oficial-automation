@@ -3,7 +3,7 @@ name: Diario Oficial Automation
 on:
   workflow_dispatch:  # Permite execução manual
   schedule:
-    # Agendado para rodar às 00:03 UTC (20:03 no UTC-4)
+    # Agendado para rodar às 00:03 UTC (correspondente a 20:03 UTC-4)
     - cron: '3 0 * * 0-4'
 
 jobs:
@@ -22,10 +22,26 @@ jobs:
       - name: Install Chrome and ChromeDriver
         run: |
           sudo apt-get update
-          sudo apt-get install -y google-chrome-stable
-          sudo apt-get install -y chromedriver
+          sudo apt-get install -y wget unzip
 
-      - name: Install dependencies
+          # Baixar e instalar o Google Chrome
+          wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get -f install -y
+
+          # Obter a versão do Chrome instalado
+          CHROME_VERSION=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+')
+
+          # Baixar o ChromeDriver correspondente à versão do Chrome
+          wget https://chromedriver.storage.googleapis.com/${CHROME_VERSION}/chromedriver_linux64.zip
+
+          # Extrair e mover o ChromeDriver para /usr/local/bin
+          sudo unzip chromedriver_linux64.zip -d /usr/local/bin/
+          sudo chmod +x /usr/local/bin/chromedriver
+
+          # Verificar a instalação do ChromeDriver
+          chromedriver --version
+
+      - name: Install Python dependencies
         run: |
           pip install pdfplumber yagmail requests selenium
 
