@@ -28,11 +28,11 @@ jobs:
           wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
           sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get -f install -y
 
-          # Obter a versão do Chrome instalado
-          CHROME_VERSION=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+')
+          # Obter a última versão estável do ChromeDriver
+          LATEST_VERSION=$(curl -sS https://chromedriver.storage.googleapis.com/LATEST_RELEASE)
 
-          # Baixar o ChromeDriver correspondente à versão do Chrome
-          wget https://chromedriver.storage.googleapis.com/${CHROME_VERSION}/chromedriver_linux64.zip
+          # Baixar o ChromeDriver correspondente
+          wget https://chromedriver.storage.googleapis.com/${LATEST_VERSION}/chromedriver_linux64.zip
 
           # Extrair e mover o ChromeDriver para /usr/local/bin
           sudo unzip chromedriver_linux64.zip -d /usr/local/bin/
@@ -40,6 +40,7 @@ jobs:
 
           # Verificar a instalação do ChromeDriver
           chromedriver --version
+
 
       - name: Install Python dependencies
         run: |
