@@ -7,8 +7,15 @@ import re
 import yagmail
 import os
 
-# Inicializando o driver do Chrome (sem caminho explícito)
-driver = webdriver.Chrome()
+# Definir as opções do Chrome para rodar sem interface gráfica
+options = webdriver.ChromeOptions()
+options.add_argument("--headless")  # Executar no modo headless (sem interface gráfica)
+options.add_argument("--no-sandbox")  # Necessário para alguns ambientes CI
+options.add_argument("--disable-dev-shm-usage")  # Previne problemas de memória compartilhada
+options.add_argument("--remote-debugging-port=9222")  # Debug remoto para evitar crashes
+
+# Inicializa o ChromeDriver com as opções definidas
+driver = webdriver.Chrome(options=options)
 
 # Acessar o site do Diário Oficial
 url_site = 'https://www.mprr.mp.br/servicos/diario'
