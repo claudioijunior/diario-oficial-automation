@@ -24,20 +24,17 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y wget unzip curl
 
-          # Instalar o Google Chrome
+          # Instalar Google Chrome
           wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
           sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get -f install -y
 
-          # Obter a versão do Chrome instalado
-          CHROME_VERSION=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+' | head -n1)
+          # Obter a versão principal do Google Chrome (exemplo: 130)
+          CHROME_MAJOR_VERSION=$(google-chrome --version | grep -oP '\d+' | head -n1)
 
-          # Truncar para obter apenas a versão principal (por exemplo, 130.0)
-          CHROME_MAJOR_VERSION=$(echo $CHROME_VERSION | cut -d '.' -f 1-2)
-
-          # Obter a versão correta do ChromeDriver para essa versão principal
+          # Obter a última versão do ChromeDriver correspondente
           CHROMEDRIVER_VERSION=$(curl -sS https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$CHROME_MAJOR_VERSION)
 
-          # Verificar se a versão foi corretamente recuperada
+          # Verificar se a versão foi recuperada corretamente
           if [ -z "$CHROMEDRIVER_VERSION" ]; then
             echo "Erro ao obter a versão do ChromeDriver."
             exit 1
