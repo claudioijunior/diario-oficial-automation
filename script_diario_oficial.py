@@ -6,6 +6,7 @@ import requests
 import pdfplumber
 import re
 import yagmail
+import os
 
 # Caminho para o ChromeDriver
 caminho_driver = 'C:/Users/Claudio/Documents/code/python/chromedriver-win64/chromedriver.exe'
@@ -83,8 +84,12 @@ if texto_extraido:
 else:
     conteudo_email = "A palavra 'Nomear' NÃO foi encontrada no PDF."
 
+# Recuperar as credenciais das variáveis de ambiente
+email_user = os.getenv('EMAIL_USER')
+email_pass = os.getenv('EMAIL_PASS')
+
 # Configurar yagmail com seu e-mail e senha de aplicativo
-yag = yagmail.SMTP('ccheadsindaclouds@gmail.com', 'wger naxh foxf stqz')
+yag = yagmail.SMTP(email_user, email_pass)
 
 # Enviar o e-mail com o resultado
 yag.send(
