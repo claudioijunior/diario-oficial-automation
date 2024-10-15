@@ -1,6 +1,7 @@
 name: Diario Oficial Automation
 
 on:
+  workflow_dispatch:  # Permite execução manual
   schedule:
     # Agendado para rodar às 00:03 UTC (20:03 no UTC-4)
     - cron: '3 0 * * 0-4'
@@ -24,7 +25,7 @@ jobs:
           sudo apt-get install -y google-chrome-stable
           sudo apt-get install -y chromedriver
 
-      - name: Install Python dependencies
+      - name: Install dependencies
         run: |
           pip install pdfplumber yagmail requests selenium
 
