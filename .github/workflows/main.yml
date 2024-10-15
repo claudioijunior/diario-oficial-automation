@@ -1,0 +1,30 @@
+name: Diario Oficial Automation
+
+on:
+  schedule:
+    # Agendado para rodar de segunda a sexta às 20:03 UTC
+    - cron: '3 20 * * 1-5'
+
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: |
+          pip install pdfplumber yagmail requests
+
+      - name: Run Python script
+        env:
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+        run: |
+          python meu_script.py
