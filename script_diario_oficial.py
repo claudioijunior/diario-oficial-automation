@@ -71,27 +71,35 @@ try:
                 padrao = rf'{palavra_inicio}\s*.*?\s*{palavra_fim}'
                 match = re.search(padrao, texto, re.DOTALL | re.IGNORECASE)
                 if match:
-                    return texto, match.group(0)
-        return None, None
+                    return match.group(0)
+        return None
 
-    texto_completo, texto_nomeacao = extrair_texto_completo(nome_arquivo, "Nomear", "Procurador-Geral de Justiça")
-    logging.info(f"Texto de nomeação extraído: {texto_nomeacao if texto_nomeacao else 'Nenhuma nomeação encontrada.'}")
+    # Verificar se "concurso público" aparece no PDF de forma case-insensitive
+    def verificar_concurso_publico(nome_arquivo):
+        with pdfplumber.open(nome_arquivo) as pdf:
+            for pagina in pdf.pages:
+                texto = pagina.extract_text()
+                if re.search(r'concurso público', texto, re.IGNORECASE):  # Pesquisa case-insensitive
+                    return True
+    return False
 
-    # Verificar se o termo "concurso público" aparece no texto
-    concurso_publico = re.search(r'concurso público', texto_completo, re.IGNORECASE) if texto_completo else False
-    logging.info(f"Concurso público encontrado: {'Sim' if concurso_publico else 'Não'}")
+    # Extrair o texto relevante e verificar "concurso público"
+    texto_extraido = extrair_texto_completo(nome_arquivo, "Nomear", "Procurador-Geral de Justiça")
+    encontrou_concurso_publico = verificar_concurso_publico(nome_arquivo)
 
     # Conteúdo do e-mail
     conteudo_email = ""
-    if texto_nomeacao:
-        conteudo_email += f"Texto de nomeação encontrado:\n{texto_nomeacao}\n"
-    if concurso_publico:
-        conteudo_email += "\nObservação: O termo 'concurso público' foi encontrado no documento."
-
-    if texto_nomeacao or concurso_publico:
-        conteudo_email += f"\nLink direto para o PDF: {link_pdf_completo}"
+    if texto_extraido:
+        conteudo_email += f"Texto encontrado:\n{texto_extraido}\n\n"
     else:
-        conteudo_email = "Nenhuma nomeação ou menção de 'concurso público' foi encontrada no documento."
+        conteudo_email += "Nenhuma ocorrência encontrada.\n\n"
+
+    if encontrou_concurso_publico:
+        conteudo_email += "Observação: O termo 'concurso público' foi encontrado no documento.\n"
+
+    # Adicionar o link para o PDF se houver ocorrências
+    if texto_extraido or encontrou_concurso_publico:
+        conteudo_email += f"\nAcesse o PDF aqui: {link_pdf_completo}"
 
     # Configurar e enviar o e-mail
     email_user = os.getenv('EMAIL_USER')
