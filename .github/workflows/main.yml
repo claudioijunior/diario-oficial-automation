@@ -24,6 +24,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y wget unzip curl
 
+          # Remover qualquer versão antiga do Google Chrome
+          sudo apt-get remove -y google-chrome-stable
+
           # Baixar e instalar o Google Chrome versão 130 (mais recente)
           wget https://storage.googleapis.com/chrome-for-testing-public/130.0.6723.58/linux64/chrome-linux64.zip
           unzip chrome-linux64.zip -d chrome
