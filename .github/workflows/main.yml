@@ -24,12 +24,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y wget unzip curl
 
-          # Remover qualquer versão antiga do Google Chrome
-          sudo apt-get remove -y google-chrome-stable
-
-          # Baixar e instalar o Google Chrome versão 129 (mais recente na série 129)
+          # Baixar e instalar o Google Chrome versão 129
           wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
           sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get -f install -y
+
+          # Mover o binário do Google Chrome para o diretório correto
+          sudo ln -s /usr/bin/google-chrome /usr/local/bin/google-chrome
 
           # Baixar e instalar o ChromeDriver correspondente à versão 129
           wget https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/129.0.6668.100/linux64/chromedriver-linux64.zip
