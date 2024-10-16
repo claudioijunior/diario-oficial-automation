@@ -63,7 +63,7 @@ try:
         driver.quit()
         exit(1)
     
-    # Extrair texto entre "Conceder" e "Procurador-Geral de Justiça"
+    # Extrair texto entre "Nomear" e "Procurador-Geral de Justiça"
     def extrair_texto_completo(nome_arquivo, palavra_inicio, palavra_fim):
         with pdfplumber.open(nome_arquivo) as pdf:
             for pagina in pdf.pages:
@@ -71,22 +71,31 @@ try:
                 padrao = rf'{palavra_inicio}\s*.*?\s*{palavra_fim}'
                 match = re.search(padrao, texto, re.DOTALL | re.IGNORECASE)
                 if match:
-                    return match.group(0)
-        return None
+                    return texto, match.group(0)
+        return None, None
 
-    texto_extraido = extrair_texto_completo(nome_arquivo, "Conceder", "Procurador-Geral de Justiça")
-    logging.info(f"Texto extraído: {texto_extraido if texto_extraido else 'Nenhuma ocorrência encontrada.'}")
+    texto_completo, texto_nomeacao = extrair_texto_completo(nome_arquivo, "Nomear", "Procurador-Geral de Justiça")
+    logging.info(f"Texto de nomeação extraído: {texto_nomeacao if texto_nomeacao else 'Nenhuma nomeação encontrada.'}")
+
+    # Verificar se o termo "concurso público" aparece no texto
+    concurso_publico = re.search(r'concurso público', texto_completo, re.IGNORECASE) if texto_completo else False
+    logging.info(f"Concurso público encontrado: {'Sim' if concurso_publico else 'Não'}")
 
     # Conteúdo do e-mail
-    conteudo_email = f"Texto encontrado:\n{texto_extraido}" if texto_extraido else "Nenhuma ocorrência encontrada."
+    conteudo_email = ""
+    if texto_nomeacao:
+        conteudo_email += f"Texto de nomeação encontrado:\n{texto_nomeacao}\n"
+    if concurso_publico:
+        conteudo_email += "\nObservação: O termo 'concurso público' foi encontrado no documento."
+
+    if texto_nomeacao or concurso_publico:
+        conteudo_email += f"\nLink direto para o PDF: {link_pdf_completo}"
+    else:
+        conteudo_email = "Nenhuma nomeação ou menção de 'concurso público' foi encontrada no documento."
 
     # Configurar e enviar o e-mail
     email_user = os.getenv('EMAIL_USER')
     email_pass = os.getenv('EMAIL_PASS')
-
-    if not email_user or not email_pass:
-        logging.error("Credenciais de e-mail não encontradas. Certifique-se de que as variáveis de ambiente estão configuradas corretamente.")
-        exit(1)
 
     try:
         yag = yagmail.SMTP(email_user, email_pass)
