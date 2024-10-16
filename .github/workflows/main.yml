@@ -29,13 +29,21 @@ jobs:
           sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get -f install -y
 
           # Obter a versão principal do Google Chrome (exemplo: 130)
-          CHROME_MAJOR_VERSION=$(google-chrome --version | grep -oP '\d+' | head -n1)
+          CHROME_VERSION=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+')
+          CHROME_MAJOR_VERSION=$(echo $CHROME_VERSION | cut -d '.' -f 1)
 
-          # Verificar o link mais recente para ChromeDriver for Testing
           echo "Baixando ChromeDriver para versão do Chrome: $CHROME_MAJOR_VERSION"
-          
-          # Baixar o ChromeDriver for Testing (adaptado do novo repositório)
-          wget https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${CHROME_MAJOR_VERSION}.0.0/linux64/chromedriver-linux64.zip
+
+          # Baixar o ChromeDriver para "Chrome for Testing"
+          wget https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/$CHROME_MAJOR_VERSION.0.0/linux64/chromedriver-linux64.zip || \
+          wget https://storage.googleapis.com/chrome-for-testing-public/$CHROME_MAJOR_VERSION.0.0/linux64/chromedriver-linux64.zip
+
+          # Se o download falhar, tentar pegar a última versão estável do ChromeDriver
+          if [ ! -f chromedriver-linux64.zip ]; then
+            echo "Tentando baixar o último ChromeDriver estável"
+            CHROMEDRIVER_VERSION=$(curl -sS https://googlechromelabs.github.io/chrome-for-testing/LATEST_RELEASE)
+            wget https://storage.googleapis.com/chrome-for-testing-public/$CHROMEDRIVER_VERSION/linux64/chromedriver-linux64.zip
+          fi
 
           # Extrair e instalar o ChromeDriver
           sudo unzip chromedriver-linux64.zip -d /usr/local/bin/
