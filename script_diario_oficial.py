@@ -84,6 +84,10 @@ try:
     email_user = os.getenv('EMAIL_USER')
     email_pass = os.getenv('EMAIL_PASS')
 
+    if not email_user or not email_pass:
+        logging.error("Credenciais de e-mail não encontradas. Certifique-se de que as variáveis de ambiente estão configuradas corretamente.")
+        exit(1)
+
     try:
         yag = yagmail.SMTP(email_user, email_pass)
         yag.send(to='ccordeiro72@gmail.com', subject='Resultado Diário - Diário Oficial', contents=conteudo_email)
