@@ -31,22 +31,14 @@ jobs:
           # Obter a versão principal do Google Chrome (exemplo: 130)
           CHROME_MAJOR_VERSION=$(google-chrome --version | grep -oP '\d+' | head -n1)
 
-          # Obter a versão do ChromeDriver correspondente; se falhar, pegar a última versão estável
-          CHROMEDRIVER_VERSION=$(curl -sS https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$CHROME_MAJOR_VERSION || curl -sS https://chromedriver.storage.googleapis.com/LATEST_RELEASE)
-
-          # Verificar se a versão foi recuperada corretamente
-          if [ -z "$CHROMEDRIVER_VERSION" ]; then
-            echo "Erro ao obter a versão do ChromeDriver."
-            exit 1
-          fi
-
-          echo "Baixando ChromeDriver versão: $CHROMEDRIVER_VERSION"
-
-          # Baixar o ChromeDriver correspondente
-          wget https://chromedriver.storage.googleapis.com/${CHROMEDRIVER_VERSION}/chromedriver_linux64.zip
+          # Verificar o link mais recente para ChromeDriver for Testing
+          echo "Baixando ChromeDriver para versão do Chrome: $CHROME_MAJOR_VERSION"
+          
+          # Baixar o ChromeDriver for Testing (adaptado do novo repositório)
+          wget https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${CHROME_MAJOR_VERSION}.0.0/linux64/chromedriver-linux64.zip
 
           # Extrair e instalar o ChromeDriver
-          sudo unzip chromedriver_linux64.zip -d /usr/local/bin/
+          sudo unzip chromedriver-linux64.zip -d /usr/local/bin/
           sudo chmod +x /usr/local/bin/chromedriver
 
           # Verificar a instalação do ChromeDriver
