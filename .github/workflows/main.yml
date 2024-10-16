@@ -32,12 +32,14 @@ jobs:
           # Baixar e instalar o ChromeDriver correspondente
           wget https://storage.googleapis.com/chrome-for-testing-public/130.0.6723.58/linux64/chromedriver-linux64.zip
           unzip chromedriver-linux64.zip -d chromedriver
-          sudo mv chromedriver/chromedriver /usr/local/bin/chromedriver
+          # Movendo o chromedriver para a pasta correta
+          sudo mv chromedriver/chromedriver-linux64/chromedriver /usr/local/bin/chromedriver
           sudo chmod +x /usr/local/bin/chromedriver
 
           # Verificar a instalação do Chrome e do ChromeDriver
           /usr/local/bin/google-chrome --version
           /usr/local/bin/chromedriver --version
+
 
       - name: Install Python dependencies
         run: |
