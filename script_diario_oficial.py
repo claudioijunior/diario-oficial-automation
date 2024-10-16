@@ -81,7 +81,7 @@ try:
                 texto = pagina.extract_text()
                 if re.search(r'concurso público', texto, re.IGNORECASE):  # Pesquisa case-insensitive
                     return True
-    return False
+        return False
 
     # Extrair o texto relevante e verificar "concurso público"
     texto_extraido = extrair_texto_completo(nome_arquivo, "Nomear", "Procurador-Geral de Justiça")
