@@ -24,33 +24,20 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y wget unzip curl
 
-          # Instalar Google Chrome
-          wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-          sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get -f install -y
+          # Baixar e instalar o Google Chrome
+          wget https://storage.googleapis.com/chrome-for-testing-public/130.0.6723.58/linux64/chrome-linux64.zip
+          unzip chrome-linux64.zip -d chrome
+          sudo mv chrome /usr/local/bin/google-chrome
 
-          # Obter a versão principal do Google Chrome (exemplo: 130)
-          CHROME_VERSION=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+')
-          CHROME_MAJOR_VERSION=$(echo $CHROME_VERSION | cut -d '.' -f 1)
-
-          echo "Baixando ChromeDriver para versão do Chrome: $CHROME_MAJOR_VERSION"
-
-          # Baixar o ChromeDriver para "Chrome for Testing"
-          wget https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/$CHROME_MAJOR_VERSION.0.0/linux64/chromedriver-linux64.zip || \
-          wget https://storage.googleapis.com/chrome-for-testing-public/$CHROME_MAJOR_VERSION.0.0/linux64/chromedriver-linux64.zip
-
-          # Se o download falhar, tentar pegar a última versão estável do ChromeDriver
-          if [ ! -f chromedriver-linux64.zip ]; then
-            echo "Tentando baixar o último ChromeDriver estável"
-            CHROMEDRIVER_VERSION=$(curl -sS https://googlechromelabs.github.io/chrome-for-testing/LATEST_RELEASE)
-            wget https://storage.googleapis.com/chrome-for-testing-public/$CHROMEDRIVER_VERSION/linux64/chromedriver-linux64.zip
-          fi
-
-          # Extrair e instalar o ChromeDriver
-          sudo unzip chromedriver-linux64.zip -d /usr/local/bin/
+          # Baixar e instalar o ChromeDriver correspondente
+          wget https://storage.googleapis.com/chrome-for-testing-public/130.0.6723.58/linux64/chromedriver-linux64.zip
+          unzip chromedriver-linux64.zip -d chromedriver
+          sudo mv chromedriver/chromedriver /usr/local/bin/chromedriver
           sudo chmod +x /usr/local/bin/chromedriver
 
-          # Verificar a instalação do ChromeDriver
-          chromedriver --version
+          # Verificar a instalação do Chrome e do ChromeDriver
+          /usr/local/bin/google-chrome --version
+          /usr/local/bin/chromedriver --version
 
       - name: Install Python dependencies
         run: |
