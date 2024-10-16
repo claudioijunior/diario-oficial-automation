@@ -24,16 +24,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y wget unzip curl
 
-          # Baixar e instalar o Google Chrome
+          # Baixar e instalar o Google Chrome versão 130 (mais recente)
           wget https://storage.googleapis.com/chrome-for-testing-public/130.0.6723.58/linux64/chrome-linux64.zip
           unzip chrome-linux64.zip -d chrome
           sudo mv chrome/chrome-linux64/chrome /usr/local/bin/google-chrome
           sudo chmod +x /usr/local/bin/google-chrome
 
-          # Baixar e instalar o ChromeDriver correspondente
+          # Baixar e instalar o ChromeDriver correspondente à versão 130
           wget https://storage.googleapis.com/chrome-for-testing-public/130.0.6723.58/linux64/chromedriver-linux64.zip
           unzip chromedriver-linux64.zip -d chromedriver
-          # Movendo o chromedriver para a pasta correta
           sudo mv chromedriver/chromedriver-linux64/chromedriver /usr/local/bin/chromedriver
           sudo chmod +x /usr/local/bin/chromedriver
 
