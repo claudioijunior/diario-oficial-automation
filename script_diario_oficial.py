@@ -105,9 +105,11 @@ try:
     email_user = os.getenv('EMAIL_USER')
     email_pass = os.getenv('EMAIL_PASS')
 
+    destinatarios = ['ccordeiro72@gmail.com', 'rasmenezes@gmail.com']  # Adicione mais e-mails conforme necessário
+    
     try:
         yag = yagmail.SMTP(email_user, email_pass)
-        yag.send(to='ccordeiro72@gmail.com', subject='Resultado Diário - Diário Oficial', contents=conteudo_email)
+        yag.send(to=destinatarios, subject='Resultado Diário - Diário Oficial', contents=conteudo_email)
         logging.info("E-mail enviado com sucesso!")
     except Exception as e:
         logging.error(f"Erro ao enviar e-mail: {e}")
