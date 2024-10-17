@@ -92,7 +92,7 @@ try:
     if texto_extraido:
         conteudo_email += f"Texto encontrado:\n{texto_extraido}\n\n"
     else:
-        conteudo_email += "Nenhuma ocorrência encontrada.\n\n"
+        conteudo_email += "NAAAAAAADA.\n\n"
 
     if encontrou_concurso_publico:
         conteudo_email += "Observação: O termo 'concurso público' foi encontrado no documento.\n"
@@ -109,7 +109,7 @@ try:
     
     try:
         yag = yagmail.SMTP(email_user, email_pass)
-        yag.send(to=destinatarios, subject='Resultado Diário - Diário Oficial', contents=conteudo_email)
+        yag.send(to=destinatarios, subject='E o MP?', contents=conteudo_email)
         logging.info("E-mail enviado com sucesso!")
     except Exception as e:
         logging.error(f"Erro ao enviar e-mail: {e}")
