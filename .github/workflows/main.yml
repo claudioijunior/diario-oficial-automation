@@ -4,7 +4,7 @@ on:
   workflow_dispatch:  # Permitir execução manual
   schedule:
     # Agendado para rodar às 22:30 UTC de segunda a sexta (dias 1 a 5 da semana)
-    - cron: '00 23 * * 1-5'
+    - cron: '30 23 * * 1-5'
 
 jobs:
   run-script:
