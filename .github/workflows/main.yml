@@ -28,6 +28,9 @@ jobs:
           wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
           sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get -f install -y
 
+          # Fixar a versão do Google Chrome para evitar atualizações automáticas
+          sudo apt-mark hold google-chrome-stable
+
           # Mover o binário do Google Chrome para o diretório correto
           sudo ln -s /usr/bin/google-chrome /usr/local/bin/google-chrome
 
