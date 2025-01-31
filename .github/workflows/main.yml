@@ -3,8 +3,8 @@ name: Diario Oficial Automation
 on:
   workflow_dispatch:  # Permitir execução manual
   schedule:
-    # Agendado para rodar às 22:30 UTC de segunda a sexta (dias 1 a 5 da semana)
-    - cron: '30 23 * * 1-5'
+    # Agendado para rodar às 07:30 AM (UTC-4), que equivale a 11:30 AM UTC
+    - cron: '30 11 * * 1-5'
 
 jobs:
   run-script:
