@@ -24,6 +24,15 @@ jobs:
         with:
           install-chromedriver: true
 
+      - name: Check Chrome versions
+        run: |
+          chrome --version || true
+          google-chrome --version || true
+          chromedriver --version || true
+          which chrome || true
+          which chromedriver || true
+
+
 
       - name: Install Python dependencies
         run: |
