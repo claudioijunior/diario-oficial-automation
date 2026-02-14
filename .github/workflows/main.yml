@@ -1,52 +1,46 @@
 name: Diario Oficial Automation
 
 on:
-  workflow_dispatch:  # Permitir execução manual
+  workflow_dispatch:
   schedule:
-    # Agendado para rodar às 07:30 AM (UTC-4), que equivale a 11:30 AM UTC
-    - cron: '30 11 * * 1-5'
+    - cron: '30 11 * * 1-5'  # 11:30 UTC = 08:30 São Paulo (UTC-3) = 07:30 Boa Vista (UTC-4)
 
 jobs:
   run-script:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: '3.11'
+          cache: 'pip'
 
-      - name: Install Chrome and ChromeDriver
+      - name: Install Chrome and ChromeDriver (pinned)
         run: |
           sudo apt-get update
           sudo apt-get install -y wget unzip curl
 
-          # Baixar e instalar o Google Chrome versão 129
           wget https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_129.0.6668.89-1_amd64.deb
           sudo dpkg -i google-chrome-stable_129.0.6668.89-1_amd64.deb || sudo apt-get -f install -y
-
-          # Travar a versão do Google Chrome para evitar atualizações automáticas
           sudo apt-mark hold google-chrome-stable
 
-          # Mover o binário do Google Chrome para o diretório correto
           sudo ln -sf /usr/bin/google-chrome /usr/local/bin/google-chrome
 
-          # Baixar e instalar o ChromeDriver correspondente à versão 129
           wget https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/129.0.6668.100/linux64/chromedriver-linux64.zip
           unzip chromedriver-linux64.zip -d chromedriver
           sudo mv chromedriver/chromedriver-linux64/chromedriver /usr/local/bin/chromedriver
           sudo chmod +x /usr/local/bin/chromedriver
 
-          # Verificar a instalação do Chrome e do ChromeDriver
           /usr/local/bin/google-chrome --version
           /usr/local/bin/chromedriver --version
 
-
       - name: Install Python dependencies
         run: |
+          python -m pip install --upgrade pip
           pip install pdfplumber yagmail requests selenium
 
       - name: Run Python script
