@@ -21,27 +21,24 @@ jobs:
 
       - name: Set up Chrome (with matching ChromeDriver)
         uses: browser-actions/setup-chrome@v2
+        id: setup-chrome
         with:
+          chrome-version: stable
           install-chromedriver: true
-
+          install-dependencies: true
+      
       - name: Check Chrome versions
         run: |
-          chrome --version || true
-          google-chrome --version || true
-          chromedriver --version || true
-          which chrome || true
-          which chromedriver || true
-
-
-
-      - name: Install Python dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
+          echo "Chrome path: ${{ steps.setup-chrome.outputs.chrome-path }}"
+          echo "ChromeDriver path: ${{ steps.setup-chrome.outputs.chromedriver-path }}"
+          ${{ steps.setup-chrome.outputs.chrome-path }} --version
+          ${{ steps.setup-chrome.outputs.chromedriver-path }} --version
+      
       - name: Run Python script
         env:
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+          CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
+          CHROMEDRIVER_BIN: ${{ steps.setup-chrome.outputs.chromedriver-path }}
         run: |
           python script_diario_oficial.py
