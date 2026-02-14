@@ -19,24 +19,11 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
 
-      - name: Install Chrome and ChromeDriver (pinned)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y wget unzip curl
+      - name: Set up Chrome (with matching ChromeDriver)
+        uses: browser-actions/setup-chrome@v2
+        with:
+          install-chromedriver: true
 
-          wget https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_129.0.6668.89-1_amd64.deb
-          sudo dpkg -i google-chrome-stable_129.0.6668.89-1_amd64.deb || sudo apt-get -f install -y
-          sudo apt-mark hold google-chrome-stable
-
-          sudo ln -sf /usr/bin/google-chrome /usr/local/bin/google-chrome
-
-          wget https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/129.0.6668.100/linux64/chromedriver-linux64.zip
-          unzip chromedriver-linux64.zip -d chromedriver
-          sudo mv chromedriver/chromedriver-linux64/chromedriver /usr/local/bin/chromedriver
-          sudo chmod +x /usr/local/bin/chromedriver
-
-          /usr/local/bin/google-chrome --version
-          /usr/local/bin/chromedriver --version
 
       - name: Install Python dependencies
         run: |
