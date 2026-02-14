@@ -34,11 +34,23 @@ jobs:
           install-chromedriver: true
           install-dependencies: true
       
+      - name: Restore state cache
+        uses: actions/cache@v4
+        with:
+          path: .state
+          key: diario-state-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            diario-state-${{ runner.os }}-
+
+      
       - name: Run Python script
         env:
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
           CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
           CHROMEDRIVER_BIN: ${{ steps.setup-chrome.outputs.chromedriver-path }}
+          SEND_ONLY_IF_NEW: "true"
+          SEND_ONLY_IF_MATCH: "false"
         run: |
           python script_diario_oficial.py
+
