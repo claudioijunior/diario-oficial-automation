@@ -12,13 +12,20 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-
+      
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: 'pip'
-
+      
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip show requests || true
+          python -c "import requests; print('requests OK:', requests.__version__)"
+      
       - name: Set up Chrome (with matching ChromeDriver)
         uses: browser-actions/setup-chrome@v2
         id: setup-chrome
@@ -26,13 +33,6 @@ jobs:
           chrome-version: stable
           install-chromedriver: true
           install-dependencies: true
-      
-      - name: Check Chrome versions
-        run: |
-          echo "Chrome path: ${{ steps.setup-chrome.outputs.chrome-path }}"
-          echo "ChromeDriver path: ${{ steps.setup-chrome.outputs.chromedriver-path }}"
-          ${{ steps.setup-chrome.outputs.chrome-path }} --version
-          ${{ steps.setup-chrome.outputs.chromedriver-path }} --version
       
       - name: Run Python script
         env:
