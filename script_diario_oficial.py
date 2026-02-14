@@ -2,6 +2,7 @@ import logging
 import os
 import re
 import sys
+import shutil
 import requests
 import pdfplumber
 import yagmail
@@ -18,23 +19,23 @@ logging.info("Iniciando o script...")
 URL_SITE = "https://www.mprr.mp.br/servicos/diario"
 NOME_ARQUIVO = "diario_oficial_mais_recente.pdf"
 
+
 def baixar_pdf(url: str, destino: str) -> None:
     headers = {"User-Agent": "Mozilla/5.0"}
     r = requests.get(url, headers=headers, timeout=60)
     r.raise_for_status()
 
-    # Algumas vezes servidor manda HTML (erro/redirect)
     content_type = (r.headers.get("Content-Type") or "").lower()
     if "text/html" in content_type:
         raise RuntimeError("Recebido HTML em vez de PDF (Content-Type text/html).")
 
     # Validação simples de “cara de PDF”
     if not r.content.startswith(b"%PDF"):
-        # Ainda pode ser PDF válido sem header no primeiro chunk? raro. Aqui é bom falhar pra não dar falso positivo.
         raise RuntimeError("Conteúdo baixado não parece PDF (header %PDF não encontrado).")
 
     with open(destino, "wb") as f:
         f.write(r.content)
+
 
 def ler_texto_pdf(destino: str) -> str:
     partes = []
@@ -44,8 +45,8 @@ def ler_texto_pdf(destino: str) -> str:
             partes.append(texto)
     return "\n".join(partes)
 
+
 def extrair_entre(texto: str, inicio: str, fim: str) -> str | None:
-    # Escapa termos pra evitar surpresas de regex
     padrao = re.compile(
         re.escape(inicio) + r".*?" + re.escape(fim),
         flags=re.IGNORECASE | re.DOTALL
@@ -53,8 +54,10 @@ def extrair_entre(texto: str, inicio: str, fim: str) -> str | None:
     m = padrao.search(texto)
     return m.group(0) if m else None
 
+
 def contem_concurso_publico(texto: str) -> bool:
     return re.search(r"concurso público", texto, flags=re.IGNORECASE) is not None
+
 
 def enviar_email(assunto: str, corpo: str) -> None:
     email_user = os.getenv("EMAIL_USER")
@@ -66,15 +69,27 @@ def enviar_email(assunto: str, corpo: str) -> None:
     yag = yagmail.SMTP(email_user, email_pass)
     yag.send(to=destinatarios, subject=assunto, contents=corpo)
 
+
 # --- Selenium setup ---
 options = webdriver.ChromeOptions()
 options.add_argument("--headless=new")
 options.add_argument("--no-sandbox")
 options.add_argument("--disable-dev-shm-usage")
 
-# Se você instalou o chromedriver em /usr/local/bin/chromedriver, forçe:
-service = Service("/usr/local/bin/chromedriver")
+# (Opcional) Se quiser ser ainda mais explícito sobre o binário do Chrome:
+# chrome_bin = shutil.which("google-chrome") or shutil.which("chrome")
+# if chrome_bin:
+#     options.binary_location = chrome_bin
 
+# Encontrar chromedriver no PATH (compatível com browser-actions/setup-chrome)
+chromedriver_path = shutil.which("chromedriver")
+if not chromedriver_path:
+    raise RuntimeError(
+        "chromedriver não encontrado no PATH. "
+        "Verifique se o workflow usa browser-actions/setup-chrome@v2 com install-chromedriver: true."
+    )
+
+service = Service(chromedriver_path)
 driver = webdriver.Chrome(service=service, options=options)
 logging.info("ChromeDriver inicializado.")
 
