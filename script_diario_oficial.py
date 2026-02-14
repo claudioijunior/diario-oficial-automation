@@ -6,6 +6,7 @@ import shutil
 import requests
 import pdfplumber
 import yagmail
+import subprocess
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -29,7 +30,6 @@ def baixar_pdf(url: str, destino: str) -> None:
     if "text/html" in content_type:
         raise RuntimeError("Recebido HTML em vez de PDF (Content-Type text/html).")
 
-    # Validação simples de “cara de PDF”
     if not r.content.startswith(b"%PDF"):
         raise RuntimeError("Conteúdo baixado não parece PDF (header %PDF não encontrado).")
 
@@ -70,26 +70,41 @@ def enviar_email(assunto: str, corpo: str) -> None:
     yag.send(to=destinatarios, subject=assunto, contents=corpo)
 
 
+def _run_version(cmd: list[str]) -> str:
+    try:
+        out = subprocess.check_output(cmd, stderr=subprocess.STDOUT, text=True).strip()
+        return out
+    except Exception:
+        return "(não foi possível obter versão)"
+
+
 # --- Selenium setup ---
 options = webdriver.ChromeOptions()
 options.add_argument("--headless=new")
 options.add_argument("--no-sandbox")
 options.add_argument("--disable-dev-shm-usage")
 
-# (Opcional) Se quiser ser ainda mais explícito sobre o binário do Chrome:
-# chrome_bin = shutil.which("google-chrome") or shutil.which("chrome")
-# if chrome_bin:
-#     options.binary_location = chrome_bin
+# Pegue os binários explicitamente do workflow (mais confiável no GitHub Actions)
+chrome_bin = os.getenv("CHROME_BIN") or os.getenv("CHROME_PATH")
+chromedriver_bin = os.getenv("CHROMEDRIVER_BIN")
 
-# Encontrar chromedriver no PATH (compatível com browser-actions/setup-chrome)
-chromedriver_path = shutil.which("chromedriver")
-if not chromedriver_path:
-    raise RuntimeError(
-        "chromedriver não encontrado no PATH. "
-        "Verifique se o workflow usa browser-actions/setup-chrome@v2 com install-chromedriver: true."
-    )
+# Fallbacks locais
+if not chrome_bin:
+    chrome_bin = shutil.which("google-chrome") or shutil.which("chrome")
+if not chromedriver_bin:
+    chromedriver_bin = shutil.which("chromedriver")
 
-service = Service(chromedriver_path)
+if not chrome_bin:
+    raise RuntimeError("Chrome não encontrado. Verifique o step setup-chrome no workflow (CHROME_BIN).")
+if not chromedriver_bin:
+    raise RuntimeError("ChromeDriver não encontrado. Verifique o step setup-chrome no workflow (CHROMEDRIVER_BIN).")
+
+options.binary_location = chrome_bin
+service = Service(chromedriver_bin)
+
+logging.info(f"Usando Chrome: {chrome_bin} | {_run_version([chrome_bin, '--version'])}")
+logging.info(f"Usando ChromeDriver: {chromedriver_bin} | {_run_version([chromedriver_bin, '--version'])}")
+
 driver = webdriver.Chrome(service=service, options=options)
 logging.info("ChromeDriver inicializado.")
 
