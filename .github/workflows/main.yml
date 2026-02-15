@@ -38,6 +38,6 @@ jobs:
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
           SEND_ONLY_IF_NEW: "true"
-          SEND_ONLY_IF_MATCH: "false"
+          SEND_ONLY_IF_MATCH: "true"
         run: |
           python script_diario_oficial.py
