@@ -4,20 +4,12 @@ import re
 import sys
 import json
 import hashlib
-import shutil
-import subprocess
 from datetime import datetime
 from typing import Optional, Dict, Any, List, Tuple
 
 import requests
 import pdfplumber
 import yagmail
-
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.chrome.service import Service
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -51,7 +43,81 @@ def sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def baixar_pdf(url: str, destino: str) -> Tuple[bytes, str]:
+def fetch_html(url: str) -> str:
+    headers = {
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+    }
+    r = requests.get(url, headers=headers, timeout=60)
+    r.raise_for_status()
+    return r.text
+
+
+def parse_timestamp_from_href(href: str) -> Optional[datetime]:
+    # padrão: ...-YYYY-MM-DD-HH-MM-SS.pdf
+    m = re.search(r"(\d{4})-(\d{2})-(\d{2})-(\d{2})-(\d{2})-(\d{2})\.pdf", href)
+    if not m:
+        return None
+    y, mo, d, hh, mm, ss = map(int, m.groups())
+    return datetime(y, mo, d, hh, mm, ss)
+
+
+def parse_edicao_from_href(href: str) -> Optional[int]:
+    m = re.search(r"-n-(\d+)-", href, flags=re.IGNORECASE)
+    return int(m.group(1)) if m else None
+
+
+def extrair_links_pdf_do_html(html: str) -> List[str]:
+    """
+    Captura URLs de PDF no HTML (tanto absolutas quanto relativas).
+    Foca em /servicos/download/...pdf
+    """
+    urls = set()
+
+    # absolutas
+    for m in re.finditer(r"https?://www\.mprr\.mp\.br(/servicos/download/[^\"<>\s]+\.pdf)", html, flags=re.IGNORECASE):
+        urls.add("https://www.mprr.mp.br" + m.group(1))
+
+    # relativas
+    for m in re.finditer(r"(/servicos/download/[^\"<>\s]+\.pdf)", html, flags=re.IGNORECASE):
+        urls.add("https://www.mprr.mp.br" + m.group(1))
+
+    # filtra para o diário eletrônico do mprr (padrão mais comum)
+    filtradas = [u for u in urls if "diario-eletronico-do-mprr" in u.lower()]
+    return sorted(filtradas)
+
+
+def escolher_pdf_mais_recente(urls: List[str]) -> str:
+    """
+    Escolhe pelo timestamp do nome do arquivo; se não tiver, tenta pela edição; se não tiver, pega o maior lexicográfico.
+    """
+    candidatos = []
+    for u in urls:
+        ts = parse_timestamp_from_href(u)
+        ed = parse_edicao_from_href(u)
+        candidatos.append((ts, ed, u))
+
+    # ordena por:
+    # 1) timestamp (quando existe)
+    # 2) edição (quando existe)
+    # 3) URL
+    def key(x):
+        ts, ed, u = x
+        return (
+            ts is None,            # False primeiro
+            ts or datetime.min,    # maior timestamp no final
+            ed is None,
+            ed or -1,
+            u
+        )
+
+    candidatos.sort(key=key)
+    # queremos o "mais recente" => último
+    return candidatos[-1][2]
+
+
+def baixar_pdf(url: str, destino: str) -> bytes:
     headers = {"User-Agent": "Mozilla/5.0"}
     r = requests.get(url, headers=headers, timeout=90, allow_redirects=True)
     r.raise_for_status()
@@ -66,7 +132,7 @@ def baixar_pdf(url: str, destino: str) -> Tuple[bytes, str]:
     with open(destino, "wb") as f:
         f.write(r.content)
 
-    return r.content, content_type
+    return r.content
 
 
 def ler_texto_pdf(destino: str) -> str:
@@ -90,58 +156,6 @@ def contem_concurso_publico(texto: str) -> bool:
     return re.search(r"concurso público", texto, flags=re.IGNORECASE) is not None
 
 
-def extrair_edicao(texto_pdf: str, link_pdf: str) -> Optional[str]:
-    # 1) tenta pelo link (ex.: ...-n-870-...)
-    m = re.search(r"-n-(\d+)-", link_pdf, flags=re.IGNORECASE)
-    if m:
-        return m.group(1)
-
-    # 2) tenta pelo texto (ex.: "Edição 848")
-    m = re.search(r"\bEdi[cç][aã]o\s+(\d+)\b", texto_pdf, flags=re.IGNORECASE)
-    if m:
-        return m.group(1)
-
-    # 3) tenta pelo "Nº 848"
-    m = re.search(r"\bN[ºo]\s+(\d+)\b", texto_pdf, flags=re.IGNORECASE)
-    if m:
-        return m.group(1)
-
-    return None
-
-
-def _run_version(cmd: List[str]) -> str:
-    try:
-        out = subprocess.check_output(cmd, stderr=subprocess.STDOUT, text=True).strip()
-        return out
-    except Exception:
-        return "(não foi possível obter versão)"
-
-
-def parse_timestamp_from_href(href: str) -> Optional[datetime]:
-    # padrão comum: ...-YYYY-MM-DD-HH-MM-SS.pdf
-    m = re.search(r"(\d{4})-(\d{2})-(\d{2})-(\d{2})-(\d{2})-(\d{2})\.pdf", href)
-    if not m:
-        return None
-    y, mo, d, hh, mm, ss = map(int, m.groups())
-    return datetime(y, mo, d, hh, mm, ss)
-
-
-def escolher_link_mais_recente(hrefs: List[str]) -> str:
-    candidatos: List[Tuple[Optional[datetime], str]] = []
-    for h in hrefs:
-        candidatos.append((parse_timestamp_from_href(h), h))
-
-    # Ordena: timestamp conhecido primeiro, depois desempata por href
-    candidatos.sort(key=lambda x: (x[0] is None, x[0] or datetime.min, x[1]))
-    # pega o “máximo” pelo timestamp, mas a lista está crescente → pega o último com timestamp
-    com_ts = [c for c in candidatos if c[0] is not None]
-    if com_ts:
-        return com_ts[-1][1]
-
-    # fallback: se não achou timestamp, usa o último da lista (comportamento antigo)
-    return hrefs[-1]
-
-
 def enviar_email(assunto: str, corpo: str) -> None:
     email_user = os.getenv("EMAIL_USER")
     email_pass = os.getenv("EMAIL_PASS")
@@ -154,130 +168,74 @@ def enviar_email(assunto: str, corpo: str) -> None:
 
 
 def main() -> None:
-    logging.info("Iniciando o script...")
+    logging.info("Iniciando...")
     state = load_state()
 
-    # --- Selenium setup ---
-    options = webdriver.ChromeOptions()
-    options.add_argument("--headless=new")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--window-size=1920,1080")
+    logging.info(f"Buscando HTML: {URL_SITE}")
+    html = fetch_html(URL_SITE)
 
-    chrome_bin = os.getenv("CHROME_BIN") or os.getenv("CHROME_PATH")
-    chromedriver_bin = os.getenv("CHROMEDRIVER_BIN")
+    pdf_urls = extrair_links_pdf_do_html(html)
+    if not pdf_urls:
+        raise RuntimeError("Não encontrei URLs de PDF no HTML do /servicos/diario.")
 
-    if not chrome_bin:
-        chrome_bin = shutil.which("google-chrome") or shutil.which("chrome")
-    if not chromedriver_bin:
-        chromedriver_bin = shutil.which("chromedriver")
+    pdf_url = escolher_pdf_mais_recente(pdf_urls)
+    logging.info(f"PDF mais recente escolhido: {pdf_url}")
 
-    if not chrome_bin:
-        raise RuntimeError("Chrome não encontrado. Verifique CHROME_BIN no workflow.")
-    if not chromedriver_bin:
-        raise RuntimeError("ChromeDriver não encontrado. Verifique CHROMEDRIVER_BIN no workflow.")
+    last_link = state.get("last_link")
+    if SEND_ONLY_IF_NEW and last_link == pdf_url:
+        logging.info("Mesmo link do último run. Encerrando sem e-mail.")
+        return
 
-    options.binary_location = chrome_bin
-    service = Service(chromedriver_bin)
+    logging.info("Baixando PDF...")
+    pdf_bytes = baixar_pdf(pdf_url, NOME_ARQUIVO)
+    pdf_hash = sha256_bytes(pdf_bytes)
+    logging.info(f"PDF baixado. SHA256={pdf_hash}")
 
-    logging.info(f"Usando Chrome: {chrome_bin} | {_run_version([chrome_bin, '--version'])}")
-    logging.info(f"Usando ChromeDriver: {chromedriver_bin} | {_run_version([chromedriver_bin, '--version'])}")
-
-    driver = webdriver.Chrome(service=service, options=options)
-    logging.info("WebDriver inicializado.")
-
-    link_pdf_completo = None
-
-    try:
-        logging.info(f"Acessando site: {URL_SITE}")
-        driver.get(URL_SITE)
-
-        elementos = WebDriverWait(driver, 25).until(
-            EC.presence_of_all_elements_located((By.XPATH, "//a[contains(@class, 'fc-day-grid-event')]"))
-        )
-
-        hrefs = []
-        for el in elementos:
-            href = el.get_attribute("href")
-            if href:
-                hrefs.append(href)
-
-        if not hrefs:
-            raise RuntimeError("Nenhum link de diário encontrado na página (hrefs vazios).")
-
-        link_pdf = escolher_link_mais_recente(hrefs)
-        link_pdf_completo = f"https://www.mprr.mp.br{link_pdf}" if link_pdf.startswith("/") else link_pdf
-
-        logging.info(f"PDF escolhido: {link_pdf_completo}")
-
-        last_link = state.get("last_link")
-        if SEND_ONLY_IF_NEW and last_link == link_pdf_completo:
-            logging.info("PDF já processado anteriormente (mesmo link). Encerrando sem enviar e-mail.")
-            return
-
-        logging.info("Baixando PDF...")
-        pdf_bytes, content_type = baixar_pdf(link_pdf_completo, NOME_ARQUIVO)
-        pdf_hash = sha256_bytes(pdf_bytes)
-        logging.info(f"PDF baixado. SHA256={pdf_hash} | Content-Type={content_type}")
-
-        last_hash = state.get("last_sha256")
-        if SEND_ONLY_IF_NEW and last_hash == pdf_hash:
-            logging.info("Conteúdo do PDF igual ao último processado (mesmo SHA). Encerrando sem enviar e-mail.")
-            state["last_link"] = link_pdf_completo
-            state["last_sha256"] = pdf_hash
-            save_state(state)
-            return
-
-        logging.info("Extraindo texto do PDF...")
-        texto_pdf = ler_texto_pdf(NOME_ARQUIVO)
-
-        trecho = extrair_entre(texto_pdf, "Nomear", "Procurador-Geral de Justiça")
-        achou_concurso = contem_concurso_publico(texto_pdf)
-        edicao = extrair_edicao(texto_pdf, link_pdf_completo)
-
-        # Decide se vale enviar
-        tem_match = bool(trecho) or achou_concurso
-        if SEND_ONLY_IF_MATCH and not tem_match:
-            logging.info("Sem correspondências (match) e SEND_ONLY_IF_MATCH=true. Não envia e-mail.")
-            state["last_link"] = link_pdf_completo
-            state["last_sha256"] = pdf_hash
-            save_state(state)
-            return
-
-        assunto = "E o MP?"
-        if edicao:
-            assunto += f" (Edição {edicao})"
-
-        corpo = []
-        if trecho:
-            corpo.append("Texto encontrado:\n\n")
-            corpo.append(trecho)
-            corpo.append("\n\n")
-        else:
-            corpo.append("NAAAAAAADA.\n\n")
-
-        if achou_concurso:
-            corpo.append("Observação: O termo 'concurso público' foi encontrado no documento.\n")
-
-        corpo.append(f"\nAcesse o PDF aqui: {link_pdf_completo}\n")
-
-        conteudo_email = "".join(corpo)
-
-        logging.info("Enviando e-mail...")
-        enviar_email(assunto, conteudo_email)
-        logging.info("E-mail enviado com sucesso!")
-
-        # Atualiza state
-        state["last_link"] = link_pdf_completo
+    last_hash = state.get("last_sha256")
+    if SEND_ONLY_IF_NEW and last_hash == pdf_hash:
+        logging.info("Mesmo conteúdo (SHA) do último run. Encerrando sem e-mail.")
+        state["last_link"] = pdf_url
         state["last_sha256"] = pdf_hash
         save_state(state)
+        return
 
-    finally:
-        try:
-            driver.quit()
-        except Exception:
-            pass
-        logging.info("Navegador fechado.")
+    logging.info("Extraindo texto do PDF...")
+    texto_pdf = ler_texto_pdf(NOME_ARQUIVO)
+
+    trecho = extrair_entre(texto_pdf, "Nomear", "Procurador-Geral de Justiça")
+    achou_concurso = contem_concurso_publico(texto_pdf)
+
+    tem_match = bool(trecho) or achou_concurso
+    if SEND_ONLY_IF_MATCH and not tem_match:
+        logging.info("Sem match e SEND_ONLY_IF_MATCH=true. Não envia e-mail.")
+        state["last_link"] = pdf_url
+        state["last_sha256"] = pdf_hash
+        save_state(state)
+        return
+
+    assunto = "E o MP?"
+
+    corpo = []
+    if trecho:
+        corpo.append("Texto encontrado:\n\n")
+        corpo.append(trecho)
+        corpo.append("\n\n")
+    else:
+        corpo.append("NAAAAAAADA.\n\n")
+
+    if achou_concurso:
+        corpo.append("Observação: O termo 'concurso público' foi encontrado no documento.\n")
+
+    corpo.append(f"\nAcesse o PDF aqui: {pdf_url}\n")
+    conteudo_email = "".join(corpo)
+
+    logging.info("Enviando e-mail...")
+    enviar_email(assunto, conteudo_email)
+    logging.info("E-mail enviado com sucesso!")
+
+    state["last_link"] = pdf_url
+    state["last_sha256"] = pdf_hash
+    save_state(state)
 
 
 if __name__ == "__main__":
