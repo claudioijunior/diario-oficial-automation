@@ -1,0 +1,39 @@
+name: Scan Última Nomeação (IV Concurso Público)
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_years:
+        description: "Quantos anos para trás (a partir do ano atual listado na página)"
+        required: false
+        default: "20"
+      max_pdfs_per_year:
+        description: "Quantos PDFs por ano (do mais recente para o mais antigo)"
+        required: false
+        default: "120"
+
+jobs:
+  scan:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Run scanner (manual)
+        env:
+          MAX_YEARS: ${{ github.event.inputs.max_years }}
+          MAX_PDFS_PER_YEAR: ${{ github.event.inputs.max_pdfs_per_year }}
+        run: |
+          python scan_ultima_nomeacao.py
