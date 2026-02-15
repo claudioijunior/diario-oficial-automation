@@ -6,6 +6,7 @@ import json
 import hashlib
 from datetime import datetime
 from typing import Optional, Dict, Any, List, Tuple
+import html as htmlmod
 
 import requests
 import pdfplumber
@@ -49,71 +50,99 @@ def fetch_html(url: str) -> str:
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
     }
-    r = requests.get(url, headers=headers, timeout=60)
+    r = requests.get(url, headers=headers, timeout=60, allow_redirects=True)
     r.raise_for_status()
+    logging.info(f"HTTP {r.status_code} | final_url={r.url} | content-type={r.headers.get('Content-Type')}")
     return r.text
 
 
-def parse_timestamp_from_href(href: str) -> Optional[datetime]:
+def parse_timestamp_from_url(u: str) -> Optional[datetime]:
     # padrão: ...-YYYY-MM-DD-HH-MM-SS.pdf
-    m = re.search(r"(\d{4})-(\d{2})-(\d{2})-(\d{2})-(\d{2})-(\d{2})\.pdf", href)
+    m = re.search(r"(\d{4})-(\d{2})-(\d{2})-(\d{2})-(\d{2})-(\d{2})\.pdf", u)
     if not m:
         return None
     y, mo, d, hh, mm, ss = map(int, m.groups())
     return datetime(y, mo, d, hh, mm, ss)
 
 
-def parse_edicao_from_href(href: str) -> Optional[int]:
-    m = re.search(r"-n-(\d+)-", href, flags=re.IGNORECASE)
+def parse_edicao_from_url(u: str) -> Optional[int]:
+    m = re.search(r"-n-(\d+)-", u, flags=re.IGNORECASE)
     return int(m.group(1)) if m else None
 
 
-def extrair_links_pdf_do_html(html: str) -> List[str]:
+def normalize_html_for_pdf_search(raw: str) -> str:
     """
-    Captura URLs de PDF no HTML (tanto absolutas quanto relativas).
-    Foca em /servicos/download/...pdf
+    Normaliza escapes comuns quando URLs aparecem dentro de JS/JSON no HTML:
+    - &amp; etc.
+    - \/  (slashes escapados)
+    - \u002F (slash unicode em JSON)
     """
+    s = htmlmod.unescape(raw)
+    s = s.replace("\\u002F", "/").replace("\\u002f", "/")
+    s = s.replace("\\/", "/")
+    return s
+
+
+def extrair_links_pdf_do_html(raw_html: str) -> List[str]:
+    """
+    Extrai URLs de PDF (com foco no diário do MPRR) mesmo se estiverem escapadas em JS.
+    Retorna URLs absolutas https://www.mprr.mp.br/...
+    """
+    html_norm = normalize_html_for_pdf_search(raw_html)
+
     urls = set()
 
-    # absolutas
-    for m in re.finditer(r"https?://www\.mprr\.mp\.br(/servicos/download/[^\"<>\s]+\.pdf)", html, flags=re.IGNORECASE):
+    # 1) URLs relativas /servicos/download/...pdf
+    for m in re.finditer(r"(/servicos/download/[^\"'<>\s]+?\.pdf)", html_norm, flags=re.IGNORECASE):
         urls.add("https://www.mprr.mp.br" + m.group(1))
 
-    # relativas
-    for m in re.finditer(r"(/servicos/download/[^\"<>\s]+\.pdf)", html, flags=re.IGNORECASE):
-        urls.add("https://www.mprr.mp.br" + m.group(1))
+    # 2) URLs absolutas https://www.mprr.mp.br/servicos/download/...pdf
+    for m in re.finditer(r"(https?://www\.mprr\.mp\.br/servicos/download/[^\"'<>\s]+?\.pdf)", html_norm, flags=re.IGNORECASE):
+        urls.add(m.group(1))
 
-    # filtra para o diário eletrônico do mprr (padrão mais comum)
-    filtradas = [u for u in urls if "diario-eletronico-do-mprr" in u.lower()]
-    return sorted(filtradas)
+    # 3) Fallback bem amplo: qualquer coisa contendo .pdf e mprr (caso mude o caminho)
+    if not urls:
+        for m in re.finditer(r"([^\s\"'<>]+?\.pdf)", html_norm, flags=re.IGNORECASE):
+            candidate = m.group(1)
+            if "mprr.mp.br" in candidate:
+                # garante esquema
+                if candidate.startswith("//"):
+                    candidate = "https:" + candidate
+                elif candidate.startswith("/"):
+                    candidate = "https://www.mprr.mp.br" + candidate
+                urls.add(candidate)
+
+    # filtra para o padrão do diário (se existir)
+    filtradas = [u for u in urls if "diario" in u.lower() and "mprr" in u.lower()]
+
+    # se o filtro ficou restritivo demais, usa o conjunto bruto
+    final = filtradas if filtradas else list(urls)
+
+    final_sorted = sorted(final)
+    logging.info(f"Encontrados {len(final_sorted)} PDFs (após normalização).")
+    if final_sorted:
+        logging.info(f"Exemplo PDF: {final_sorted[-1]}")
+    return final_sorted
 
 
 def escolher_pdf_mais_recente(urls: List[str]) -> str:
-    """
-    Escolhe pelo timestamp do nome do arquivo; se não tiver, tenta pela edição; se não tiver, pega o maior lexicográfico.
-    """
     candidatos = []
     for u in urls:
-        ts = parse_timestamp_from_href(u)
-        ed = parse_edicao_from_href(u)
+        ts = parse_timestamp_from_url(u)
+        ed = parse_edicao_from_url(u)
         candidatos.append((ts, ed, u))
 
-    # ordena por:
-    # 1) timestamp (quando existe)
-    # 2) edição (quando existe)
-    # 3) URL
     def key(x):
         ts, ed, u = x
         return (
-            ts is None,            # False primeiro
-            ts or datetime.min,    # maior timestamp no final
+            ts is None,
+            ts or datetime.min,
             ed is None,
             ed or -1,
-            u
+            u,
         )
 
     candidatos.sort(key=key)
-    # queremos o "mais recente" => último
     return candidatos[-1][2]
 
 
@@ -144,10 +173,7 @@ def ler_texto_pdf(destino: str) -> str:
 
 
 def extrair_entre(texto: str, inicio: str, fim: str) -> Optional[str]:
-    padrao = re.compile(
-        re.escape(inicio) + r".*?" + re.escape(fim),
-        flags=re.IGNORECASE | re.DOTALL
-    )
+    padrao = re.compile(re.escape(inicio) + r".*?" + re.escape(fim), flags=re.IGNORECASE | re.DOTALL)
     m = padrao.search(texto)
     return m.group(0) if m else None
 
@@ -172,10 +198,13 @@ def main() -> None:
     state = load_state()
 
     logging.info(f"Buscando HTML: {URL_SITE}")
-    html = fetch_html(URL_SITE)
+    raw_html = fetch_html(URL_SITE)
 
-    pdf_urls = extrair_links_pdf_do_html(html)
+    pdf_urls = extrair_links_pdf_do_html(raw_html)
     if not pdf_urls:
+        # Loga um pedacinho pra diagnóstico (não é sensível: página pública)
+        snippet = normalize_html_for_pdf_search(raw_html)[:800]
+        logging.error("Snippet do HTML (normalizado) para debug:\n" + snippet)
         raise RuntimeError("Não encontrei URLs de PDF no HTML do /servicos/diario.")
 
     pdf_url = escolher_pdf_mais_recente(pdf_urls)
