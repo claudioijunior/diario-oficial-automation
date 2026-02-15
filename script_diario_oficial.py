@@ -5,8 +5,9 @@ import sys
 import json
 import hashlib
 from datetime import datetime
-from typing import Optional, Dict, Any, List, Tuple
+from typing import Optional, Dict, Any, List
 import html as htmlmod
+import unicodedata
 
 import requests
 import pdfplumber
@@ -22,6 +23,9 @@ STATE_FILE = os.path.join(STATE_DIR, "last_seen.json")
 
 SEND_ONLY_IF_NEW = os.getenv("SEND_ONLY_IF_NEW", "true").strip().lower() in {"1", "true", "yes", "y"}
 SEND_ONLY_IF_MATCH = os.getenv("SEND_ONLY_IF_MATCH", "false").strip().lower() in {"1", "true", "yes", "y"}
+
+# termo alvo dentro do trecho de nomeação
+TERM_IV = "iv concurso publico"
 
 
 def load_state() -> Dict[str, Any]:
@@ -56,8 +60,22 @@ def fetch_html(url: str) -> str:
     return r.text
 
 
+def normalize_html_for_pdf_search(raw: str) -> str:
+    s = htmlmod.unescape(raw)
+    s = s.replace("\\u002F", "/").replace("\\u002f", "/")
+    s = s.replace("\\/", "/")
+    return s
+
+
+def normalize_text(s: str) -> str:
+    # lower + remove acentos
+    s = s.lower()
+    s = unicodedata.normalize("NFD", s)
+    s = "".join(ch for ch in s if unicodedata.category(ch) != "Mn")
+    return s
+
+
 def parse_timestamp_from_url(u: str) -> Optional[datetime]:
-    # padrão: ...-YYYY-MM-DD-HH-MM-SS.pdf
     m = re.search(r"(\d{4})-(\d{2})-(\d{2})-(\d{2})-(\d{2})-(\d{2})\.pdf", u)
     if not m:
         return None
@@ -70,58 +88,35 @@ def parse_edicao_from_url(u: str) -> Optional[int]:
     return int(m.group(1)) if m else None
 
 
-def normalize_html_for_pdf_search(raw: str) -> str:
-    """
-    Normaliza escapes comuns quando URLs aparecem dentro de JS/JSON no HTML:
-    - &amp; etc.
-    - \/  (slashes escapados)
-    - \u002F (slash unicode em JSON)
-    """
-    s = htmlmod.unescape(raw)
-    s = s.replace("\\u002F", "/").replace("\\u002f", "/")
-    s = s.replace("\\/", "/")
-    return s
-
-
 def extrair_links_pdf_do_html(raw_html: str) -> List[str]:
-    """
-    Extrai URLs de PDF (com foco no diário do MPRR) mesmo se estiverem escapadas em JS.
-    Retorna URLs absolutas https://www.mprr.mp.br/...
-    """
     html_norm = normalize_html_for_pdf_search(raw_html)
-
     urls = set()
 
-    # 1) URLs relativas /servicos/download/...pdf
     for m in re.finditer(r"(/servicos/download/[^\"'<>\s]+?\.pdf)", html_norm, flags=re.IGNORECASE):
         urls.add("https://www.mprr.mp.br" + m.group(1))
 
-    # 2) URLs absolutas https://www.mprr.mp.br/servicos/download/...pdf
-    for m in re.finditer(r"(https?://www\.mprr\.mp\.br/servicos/download/[^\"'<>\s]+?\.pdf)", html_norm, flags=re.IGNORECASE):
+    for m in re.finditer(
+        r"(https?://www\.mprr\.mp\.br/servicos/download/[^\"'<>\s]+?\.pdf)",
+        html_norm,
+        flags=re.IGNORECASE,
+    ):
         urls.add(m.group(1))
 
-    # 3) Fallback bem amplo: qualquer coisa contendo .pdf e mprr (caso mude o caminho)
     if not urls:
         for m in re.finditer(r"([^\s\"'<>]+?\.pdf)", html_norm, flags=re.IGNORECASE):
             candidate = m.group(1)
             if "mprr.mp.br" in candidate:
-                # garante esquema
                 if candidate.startswith("//"):
                     candidate = "https:" + candidate
                 elif candidate.startswith("/"):
                     candidate = "https://www.mprr.mp.br" + candidate
                 urls.add(candidate)
 
-    # filtra para o padrão do diário (se existir)
     filtradas = [u for u in urls if "diario" in u.lower() and "mprr" in u.lower()]
-
-    # se o filtro ficou restritivo demais, usa o conjunto bruto
     final = filtradas if filtradas else list(urls)
 
     final_sorted = sorted(final)
     logging.info(f"Encontrados {len(final_sorted)} PDFs (após normalização).")
-    if final_sorted:
-        logging.info(f"Exemplo PDF: {final_sorted[-1]}")
     return final_sorted
 
 
@@ -172,14 +167,17 @@ def ler_texto_pdf(destino: str) -> str:
     return "\n".join(partes)
 
 
-def extrair_entre(texto: str, inicio: str, fim: str) -> Optional[str]:
-    padrao = re.compile(re.escape(inicio) + r".*?" + re.escape(fim), flags=re.IGNORECASE | re.DOTALL)
+def extrair_trecho_nomear_pgj(texto: str) -> Optional[str]:
+    """
+    Extrai trecho entre "Nomear" e "Procurador-Geral de Justiça" de forma mais flexível
+    (tolerando espaços e 'Justiça/Justica').
+    """
+    padrao = re.compile(
+        r"Nomear\s*.*?\s*Procurador\s*-\s*Geral\s+de\s+Justi[çc]a",
+        flags=re.IGNORECASE | re.DOTALL,
+    )
     m = padrao.search(texto)
     return m.group(0) if m else None
-
-
-def contem_concurso_publico(texto: str) -> bool:
-    return re.search(r"concurso público", texto, flags=re.IGNORECASE) is not None
 
 
 def enviar_email(assunto: str, corpo: str) -> None:
@@ -202,7 +200,6 @@ def main() -> None:
 
     pdf_urls = extrair_links_pdf_do_html(raw_html)
     if not pdf_urls:
-        # Loga um pedacinho pra diagnóstico (não é sensível: página pública)
         snippet = normalize_html_for_pdf_search(raw_html)[:800]
         logging.error("Snippet do HTML (normalizado) para debug:\n" + snippet)
         raise RuntimeError("Não encontrei URLs de PDF no HTML do /servicos/diario.")
@@ -231,35 +228,38 @@ def main() -> None:
     logging.info("Extraindo texto do PDF...")
     texto_pdf = ler_texto_pdf(NOME_ARQUIVO)
 
-    trecho = extrair_entre(texto_pdf, "Nomear", "Procurador-Geral de Justiça")
-    achou_concurso = contem_concurso_publico(texto_pdf)
+    trecho_nomeacao = extrair_trecho_nomear_pgj(texto_pdf)
 
-    tem_match = bool(trecho) or achou_concurso
-    if SEND_ONLY_IF_MATCH and not tem_match:
-        logging.info("Sem match e SEND_ONLY_IF_MATCH=true. Não envia e-mail.")
+    # >>> regra nova: só conta se "IV Concurso Público" estiver DENTRO do trecho Nomear..PGJ
+    nomeacao_iv_encontrada = False
+    trecho_relevante = None
+    if trecho_nomeacao:
+        if TERM_IV in normalize_text(trecho_nomeacao):
+            nomeacao_iv_encontrada = True
+            trecho_relevante = trecho_nomeacao
+
+    # Quando SEND_ONLY_IF_MATCH=true, só envia se a nomeação do IV concurso foi encontrada
+    if SEND_ONLY_IF_MATCH and not nomeacao_iv_encontrada:
+        logging.info("Sem nomeação do IV Concurso Público no trecho Nomear..PGJ e SEND_ONLY_IF_MATCH=true. Não envia e-mail.")
         state["last_link"] = pdf_url
         state["last_sha256"] = pdf_hash
         save_state(state)
         return
 
-    assunto = "E o MP?"
-
+    # Corpo do e-mail
     corpo = []
-    if trecho:
-        corpo.append("Texto encontrado:\n\n")
-        corpo.append(trecho)
+    if nomeacao_iv_encontrada and trecho_relevante:
+        corpo.append("Nomeação encontrada (IV Concurso Público):\n\n")
+        corpo.append(trecho_relevante)
         corpo.append("\n\n")
+        corpo.append(f"Acesse o PDF aqui: {pdf_url}\n")
     else:
         corpo.append("NAAAAAAADA.\n\n")
 
-    if achou_concurso:
-        corpo.append("Observação: O termo 'concurso público' foi encontrado no documento.\n")
-
-    corpo.append(f"\nAcesse o PDF aqui: {pdf_url}\n")
     conteudo_email = "".join(corpo)
 
     logging.info("Enviando e-mail...")
-    enviar_email(assunto, conteudo_email)
+    enviar_email("E o MP?", conteudo_email)
     logging.info("E-mail enviado com sucesso!")
 
     state["last_link"] = pdf_url
