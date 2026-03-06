@@ -1,0 +1,42 @@
+name: Diario TJRR Automation
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '30 11 * * 1-5'
+
+jobs:
+  run-script:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Restore state cache
+        uses: actions/cache@v4
+        with:
+          path: .state
+          key: diario-tjrr-state-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            diario-tjrr-state-${{ runner.os }}-
+
+      - name: Run Python script
+        env:
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+          SEND_ONLY_IF_NEW: "true"
+          SEND_ONLY_IF_MATCH: "true"
+        run: |
+          python script_diario_tjrr.py
