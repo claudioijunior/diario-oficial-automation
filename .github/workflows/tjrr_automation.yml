@@ -37,6 +37,5 @@ jobs:
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
           SEND_ONLY_IF_NEW: "true"
-          SEND_ONLY_IF_MATCH: "false"
         run: |
           python script_diario_tjrr.py
