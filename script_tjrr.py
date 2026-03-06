@@ -217,7 +217,7 @@ def enviar_email(assunto: str, corpo: str) -> None:
     if not email_user or not email_pass:
         raise RuntimeError("EMAIL_USER/EMAIL_PASS não definidos.")
 
-    destinatarios = ["ccordeiro72@gmail.com", "rasmenezes@gmail.com"]
+    destinatarios = ["ccordeiro72@gmail.com"]
     yag = yagmail.SMTP(email_user, email_pass)
     yag.send(to=destinatarios, subject=assunto, contents=corpo)
 
