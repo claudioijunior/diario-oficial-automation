@@ -262,20 +262,20 @@ def main() -> None:
     corpo = []
 
     if portarias_encontradas:
-        corpo.append(f"Foram encontradas {len(portarias_encontradas)} ocorrência(s) relacionadas a '{TERM_ALVO}'.\n\n")
+        corpo.append(f'Foram identificadas {len(portarias_encontradas)} ocorrência(s) relacionadas ao termo "VII Concurso Público".\n\n')
         for i, portaria in enumerate(portarias_encontradas, start=1):
             corpo.append(f"===== TRECHO {i} =====\n")
             corpo.append(resumir_bloco(portaria))
             corpo.append("\n\n")
-        corpo.append(f"PDF: {pdf_url}\n")
+        corpo.append(f"PDF analisado: {pdf_url}\n")
     else:
-        corpo.append("NAAAAAAADA.\n\n")
-        corpo.append(f"PDF verificado: {pdf_url}\n")
+        corpo.append('Não foram identificadas ocorrências relacionadas ao termo "VII Concurso Público" no diário analisado.\n\n')
+        corpo.append(f"PDF analisado: {pdf_url}\n")
 
     conteudo_email = "".join(corpo)
 
     logging.info("Enviando e-mail...")
-    enviar_email("E o TJRR?", conteudo_email)
+    enviar_email("Monitoramento do Diário do TJRR", conteudo_email)
     logging.info("E-mail enviado com sucesso!")
 
     state["last_link"] = pdf_url
